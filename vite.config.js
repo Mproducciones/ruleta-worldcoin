@@ -1,7 +1,13 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-})
+  build: {
+    target: 'esnext',  // Mejora compatibilidad con Vercel
+    assetsInlineLimit: 0,  // Carga assets externos
+  },
+  define: {
+    global: 'globalThis',
+  },
+});
