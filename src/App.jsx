@@ -100,6 +100,19 @@ export default function ColorPlaneGame() {
     setPlayerBalance(50);
   };
 
+  const exitDemoMode = () => {
+    localStorage.removeItem("demoMode");
+    setIsVerified(false);
+    setPlayerBalance(INITIAL_PLAYER_BALANCE);
+    setBets({ rojo: 0, azul: 0, blanco: 0 });
+    setHistory([]);
+    setView("game");
+    setPlaneAction("idle");
+    setLightAnimationState("idle");
+    setSpinning(false);
+    setIsRoundActive(false);
+  };
+
   const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
     const words = text.split(" ");
     let line = "";
@@ -132,7 +145,6 @@ export default function ColorPlaneGame() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // AJUSTAR TAMAÑO REAL DEL CANVAS
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width || radius * 2;
     canvas.height = rect.height || radius * 2;
@@ -178,7 +190,6 @@ export default function ColorPlaneGame() {
     });
   };
 
-  // DIBUJA AL INICIO
   useEffect(() => {
     const drawOnMount = () => {
       if (canvasRef.current && view === "game") {
@@ -190,7 +201,6 @@ export default function ColorPlaneGame() {
     drawOnMount();
   }, [view]);
 
-  // REDIBUJA AL GIRAR
   useEffect(() => {
     if (view === "game" && canvasRef.current) {
       const raf = requestAnimationFrame(drawWheel);
@@ -198,7 +208,6 @@ export default function ColorPlaneGame() {
     }
   }, [rotation, view]);
 
-  // LIMPIA TIMERS
   useEffect(() => {
     return () => timersRef.current.forEach(clearTimeout);
   }, []);
@@ -380,7 +389,10 @@ export default function ColorPlaneGame() {
 
       {!isVerified ? (
         <div style={{ textAlign: "center", marginTop: 60 }}>
-          <h2 style={{ color: "#ffd54f", fontSize: 28, marginBottom: 20, fontWeight: "bold" }}>Verifica tu humanidad</h2>
+          <h2 style={{ color: "#ffd54f", fontSize: 28, marginBottom: 20, fontWeight: "bold" }}>
+            Verifica tu humanidad
+          </h2>
+
           {import.meta.env.VITE_APP_ID ? (
             <IDKitWidget app_id={import.meta.env.VITE_APP_ID} action="play" signal="ruleta-colores" handleVerify={() => setIsVerified(true)}>
               {({ open }) => (
@@ -405,18 +417,53 @@ export default function ColorPlaneGame() {
           ) : (
             <p style={{ color: "#ccc" }}>App ID no configurado. Usa Modo Demo.</p>
           )}
+
           <VisuallyHidden>
             <h3>Verificación World ID</h3>
             <p>Escanea el QR con la app de Worldcoin.</p>
           </VisuallyHidden>
-          {enableDemo && (
-            <button onClick={enterDemoMode} style={{ marginTop: 16, color: "#ccc", textDecoration: "underline", fontSize: 14 }}>
+
+          {/* BOTÓN MODO DEMO */}
+          {enableDemo && !isVerified && (
+            <button 
+              onClick={enterDemoMode} 
+              style={{ 
+                marginTop: 16, 
+                color: "#ccc", 
+                textDecoration: "underline", 
+                fontSize: 14,
+                background: "none",
+                border: "none",
+                cursor: "pointer"
+              }}>
               Modo Demo (50 WLD)
             </button>
           )}
         </div>
       ) : (
         <>
+          {/* BOTÓN SALIR DEL MODO DEMO */}
+          {isVerified && localStorage.getItem("demoMode") === "true" && (
+            <div style={{ marginTop: 20, textAlign: "center" }}>
+              <p style={{ color: "#ffd54f", fontSize: 14 }}>Estás en Modo Demo</p>
+              <button
+                onClick={exitDemoMode}
+                style={{
+                  marginTop: 8,
+                  padding: "8px 16px",
+                  background: "#ff3b30",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }}
+              >
+                Salir del Modo Demo
+              </button>
+            </div>
+          )}
+
           {view === "game" && (
             <>
               <div style={{ position: "relative", marginTop: 20, width: "90%", maxWidth: 400 }}>
