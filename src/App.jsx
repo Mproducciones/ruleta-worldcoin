@@ -1,6 +1,11 @@
 // src/App.jsx
 // ========================================
-// MINIAPP RULETA WORLDCOIN - SISTEMA DE CRÉDITOS
+// MINIAPP RULETA WORLDCOIN - LAS VEGAS EDITION
+// ESTILO NEÓN + 100% RESPONSIVE + CENTRADO PERFECTO
+// SIN TEXTO EN RULETA
+// TABLA DE PAGOS NEÓN
+// 5 ROJO | 5 AZUL | 5 BLANCO | 2 ORO | 3 NEGRO
+// RTP ~75%
 // Autor: MProducciones
 // Fecha: 11 Nov 2025
 // ========================================
@@ -12,7 +17,6 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 /* eslint-disable react-hooks/exhaustive-deps */
 
-/* ===== GANCHO DE SONIDO ===== */
 const useSound = (url) => {
   const audioRef = useRef(null);
   useEffect(() => {
@@ -36,35 +40,39 @@ const useSound = (url) => {
   return play;
 };
 
-/* ===== CONFIGURACIÓN GLOBAL ===== */
-const INITIAL_CREDITS = 0;           // Créditos al inicio
-const CREDITS_PER_WLD = 1;            // 1 WLD = 1 crédito
-const MIN_WITHDRAW_WLD = 5;          // Retiro mínimo: 5 WLD
-const MAX_BET_CREDITS = 1;           // Máximo apuesta: 1 crédito
-const DEMO_CREDITS = 50;             // Créditos en modo demo
+const CONFIG = {
+  CREDITS_PER_WLD: 10,
+  MIN_PURCHASE_WLD: 1,
+  MIN_PURCHASE_CREDITS: 10,
+  MIN_WITHDRAW_CREDITS: 5,
+  WITHDRAW_STEP: 5,
+  MAX_BET_CREDITS: 100,
+  DEMO_CREDITS: 50,
+  CHIP_VALUES: [0.5, 1, 2.5, 5, 10],
+};
 
-/* ===== SECCIONES DE LA RUEDA ===== */
+/* ===== SECCIONES INTERCALADAS (18) ===== */
 const sections = [
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
+  { hex: "#ff0000", name: "ROJO", multiplier: 2 },
   { hex: "#0066ff", name: "AZUL", multiplier: 2 },
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
-  { hex: "#ffffff", name: "BLANCO", multiplier: 3 },
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
-  { hex: "#0066ff", name: "AZUL", multiplier: 2 },
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
+  { hex: "#ffffff", name: "BLANCO", multiplier: 2 },
   { hex: "#000000", name: "NEGRO", multiplier: 0 },
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
+  { hex: "#ffd700", name: "TODOS GANAN", multiplier: 2.5 },
+  { hex: "#ff0000", name: "ROJO", multiplier: 2 },
+  { hex: "#ffffff", name: "BLANCO", multiplier: 2 },
   { hex: "#0066ff", name: "AZUL", multiplier: 2 },
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
-  { hex: "#ffffff", name: "BLANCO", multiplier: 3 },
-  { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
+  { hex: "#000000", name: "NEGRO", multiplier: 0 },
+  { hex: "#ff0000", name: "ROJO", multiplier: 2 },
   { hex: "#0066ff", name: "AZUL", multiplier: 2 },
+  { hex: "#ffffff", name: "BLANCO", multiplier: 2 },
+  { hex: "#ffd700", name: "TODOS GANAN", multiplier: 2.5 },
+  { hex: "#ff0000", name: "ROJO", multiplier: 2 },
+  { hex: "#ffffff", name: "BLANCO", multiplier: 2 },
+  { hex: "#0066ff", name: "AZUL", multiplier: 2 },
+  { hex: "#000000", name: "NEGRO", multiplier: 0 },
 ];
 
 export default function ColorPlaneGame() {
-  // ========================================
-  // ESTADO PRINCIPAL
-  // ========================================
   const canvasRef = useRef(null);
   const timersRef = useRef([]);
   const pushTimer = (t) => timersRef.current.push(t);
@@ -77,11 +85,10 @@ export default function ColorPlaneGame() {
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [isRoundActive, setIsRoundActive] = useState(false);
-  const [chipValue, setChipValue] = useState(0.1); // Valor de ficha en créditos
-  const [bets, setBets] = useState({ rojo: 0, azul: 0, blanco: 0 }); // Apuestas en créditos
+  const [chipValue, setChipValue] = useState(CONFIG.CHIP_VALUES[0]);
+  const [bets, setBets] = useState({ rojo: 0, azul: 0, blanco: 0 });
   const [lastBets, setLastBets] = useState(null);
-  const [playerCredits, setPlayerCredits] = useState(INITIAL_CREDITS); // Créditos del jugador
-  const [accumulatedWLD, setAccumulatedWLD] = useState(0); // WLD ganados (para retiro)
+  const [playerCredits, setPlayerCredits] = useState(0);
   const [planeAction, setPlaneAction] = useState("idle");
   const [lightAnimationState, setLightAnimationState] = useState("idle");
   const [history, setHistory] = useState([]);
@@ -89,41 +96,36 @@ export default function ColorPlaneGame() {
   const [isVerified, setIsVerified] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const radius = 160;
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
-  // ========================================
-  // SONIDOS
-  // ========================================
+  const isDemo = localStorage.getItem("demoMode") === "true";
+
   const playSpinSound = useSound("/sounds/spin.mp3");
   const playWinSound = useSound("/sounds/win.mp3");
   const playLoseSound = useSound("/sounds/lose.mp3");
   const playBetSound = useSound("/sounds/bet.mp3");
 
-  // ========================================
-  // MODO DEMO
-  // ========================================
   const isDev = import.meta.env.DEV;
   const enableDemo = isDev || import.meta.env.VITE_ENABLE_DEMO === "true";
 
   useEffect(() => {
-    if (enableDemo && (!import.meta.env.VITE_APP_ID || localStorage.getItem("demoMode") === "true")) {
+    if (enableDemo && (!import.meta.env.VITE_APP_ID || isDemo)) {
       setIsVerified(true);
-      setPlayerCredits(DEMO_CREDITS);
+      setPlayerCredits(CONFIG.DEMO_CREDITS);
       localStorage.setItem("demoMode", "true");
     }
-  }, [enableDemo]);
+  }, [enableDemo, isDemo]);
 
   const enterDemoMode = () => {
     localStorage.setItem("demoMode", "true");
     setIsVerified(true);
-    setPlayerCredits(DEMO_CREDITS);
+    setPlayerCredits(CONFIG.DEMO_CREDITS);
   };
 
   const exitDemoMode = () => {
     localStorage.removeItem("demoMode");
     setIsVerified(false);
-    setPlayerCredits(INITIAL_CREDITS);
-    setAccumulatedWLD(0);
+    setPlayerCredits(0);
     setBets({ rojo: 0, azul: 0, blanco: 0 });
     setHistory([]);
     setView("game");
@@ -133,31 +135,7 @@ export default function ColorPlaneGame() {
     setIsRoundActive(false);
   };
 
-  // ========================================
-  // DIBUJO DE LA RULETA
-  // ========================================
-  const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
-    const words = text.split(" ");
-    let line = "", lines = [];
-    if (ctx.measureText(text).width <= maxWidth) lines.push(text);
-    else {
-      for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + " ";
-        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-          lines.push(line);
-          line = words[n] + " ";
-        } else line = testLine;
-      }
-      lines.push(line);
-    }
-    const totalTextHeight = lines.length * lineHeight;
-    let currentY = y - totalTextHeight / 2 + lineHeight / 2;
-    for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i].trim(), x, currentY);
-      currentY += lineHeight;
-    }
-  };
-
+  // === DIBUJO DE LA RULETA (SOLO COLORES) ===
   const drawWheel = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -165,47 +143,28 @@ export default function ColorPlaneGame() {
     if (!ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width || radius * 2;
-    canvas.height = rect.height || radius * 2;
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) * 0.95;
 
     const sectionAngle = (2 * Math.PI) / sections.length;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     sections.forEach((sec, i) => {
-      const startAngle = i * sectionAngle;
+      const startAngle = i * sectionAngle - Math.PI / 2;
       const endAngle = startAngle + sectionAngle;
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, canvas.height / 2);
-      ctx.arc(canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) / 2, startAngle, endAngle);
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
       ctx.closePath();
       ctx.fillStyle = sec.hex;
       ctx.fill();
-      ctx.strokeStyle = "#222";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 3;
       ctx.stroke();
-
-      const midAngle = startAngle + sectionAngle / 2;
-      const textRadius = Math.min(canvas.width, canvas.height) * 0.3;
-      const x = canvas.width / 2 + textRadius * Math.cos(midAngle);
-      const y = canvas.height / 2 + textRadius * Math.sin(midAngle);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(midAngle + Math.PI / 2);
-
-      if (sec.multiplier > 0) {
-        ctx.fillStyle = sec.hex === "#ffffff" ? "#222" : "#fff";
-        ctx.font = "bold 18px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(`x${sec.multiplier}`, 0, 0);
-      } else {
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 12px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        wrapText(ctx, "PIERDE TODO", 0, 0, 80, 16);
-      }
-      ctx.restore();
     });
   };
 
@@ -231,9 +190,29 @@ export default function ColorPlaneGame() {
     return () => timersRef.current.forEach(clearTimeout);
   }, []);
 
-  // ========================================
-  // HISTORIAL
-  // ========================================
+  // === MAX BET ===
+  const maxBet = () => {
+    const maxAllowed = Math.min(playerCredits, CONFIG.MAX_BET_CREDITS);
+    const maxChips = Math.floor(maxAllowed / chipValue);
+    if (maxChips === 0) return alert("Sin créditos");
+
+    const perColor = Math.floor(maxChips / 3);
+    const betValue = perColor * chipValue;
+    const total = betValue * 3;
+
+    if (total > CONFIG.MAX_BET_CREDITS) {
+      alert(`Límite: ${CONFIG.MAX_BET_CREDITS} créditos por jugada`);
+      return;
+    }
+
+    setBets({
+      rojo: betValue,
+      azul: betValue,
+      blanco: betValue,
+    });
+  };
+
+  // === HISTORIAL ===
   const pushHistory = (landed, bets, totalWin, losses) => {
     const now = new Date();
     setHistory((h) => [
@@ -249,13 +228,22 @@ export default function ColorPlaneGame() {
     ].slice(0, 10));
   };
 
-  // ========================================
-  // GIRAR RULETA
-  // ========================================
+  // === GIRAR RULETA ===
   const spin = () => {
     const totalBet = bets.rojo + bets.azul + bets.blanco;
-    if (spinning || totalBet <= 0 || totalBet > playerCredits || totalBet > MAX_BET_CREDITS) {
-      alert(`Apuesta inválida. Máximo ${MAX_BET_CREDITS} crédito.`);
+
+    if (spinning || totalBet <= 0 || totalBet > playerCredits) {
+      if (playerCredits === 0) {
+        alert("No tienes créditos. ¡Compra más!");
+        setShowBuyModal(true);
+      } else {
+        alert(`Apuesta inválida. Máximo ${CONFIG.MAX_BET_CREDITS} créditos por jugada.`);
+      }
+      return;
+    }
+
+    if (totalBet > CONFIG.MAX_BET_CREDITS) {
+      alert(`¡Límite! Máximo ${CONFIG.MAX_BET_CREDITS} créditos por ronda`);
       return;
     }
 
@@ -286,34 +274,37 @@ export default function ColorPlaneGame() {
 
         let totalWin = 0;
         let losses = {};
-        const color = landed.name.toLowerCase();
-
-        if (color === "rojo" && bets.rojo > 0) totalWin = bets.rojo * landed.multiplier;
-        else if (color === "azul" && bets.azul > 0) totalWin = bets.azul * landed.multiplier;
-        else if (color === "blanco" && bets.blanco > 0) totalWin = bets.blanco * landed.multiplier;
-
-        if (color !== "rojo") losses.rojo = bets.rojo;
-        if (color !== "azul") losses.azul = bets.azul;
-        if (color !== "blanco") losses.blanco = bets.blanco;
-        if (color === "negro") {
-          losses.rojo = bets.rojo;
-          losses.azul = bets.azul;
-          losses.blanco = bets.blanco;
-        }
 
         if (landed.name === "NEGRO") {
+          losses = { rojo: bets.rojo, azul: bets.azul, blanco: bets.blanco };
           alert("Cayó NEGRO. Pierdes todo");
           playLoseSound();
-        } else if (totalWin > 0) {
+        } else if (landed.name === "TODOS GANAN") {
+          totalWin = (bets.rojo + bets.azul + bets.blanco) * landed.multiplier;
           setTimeout(() => {
             setPlayerCredits((p) => p + totalWin);
-            setAccumulatedWLD((w) => w + totalWin);
-            alert(`¡Ganaste ${totalWin} créditos!`);
+            alert(`¡TODOS GANAN! +${totalWin} créditos`);
             playWinSound();
           }, 50);
         } else {
-          alert("Perdiste esta ronda.");
-          playLoseSound();
+          if (bets.rojo > 0 && landed.name === "ROJO") totalWin += bets.rojo * landed.multiplier;
+          if (bets.azul > 0 && landed.name === "AZUL") totalWin += bets.azul * landed.multiplier;
+          if (bets.blanco > 0 && landed.name === "BLANCO") totalWin += bets.blanco * landed.multiplier;
+
+          if (totalWin > 0) {
+            setTimeout(() => {
+              setPlayerCredits((p) => p + totalWin);
+              alert(`¡Ganaste ${totalWin} créditos!`);
+              playWinSound();
+            }, 50);
+          } else {
+            alert("Perdiste esta ronda.");
+            playLoseSound();
+          }
+
+          if (landed.name !== "ROJO") losses.rojo = bets.rojo;
+          if (landed.name !== "AZUL") losses.azul = bets.azul;
+          if (landed.name !== "BLANCO") losses.blanco = bets.blanco;
         }
 
         pushHistory(landed, bets, totalWin, losses);
@@ -333,14 +324,16 @@ export default function ColorPlaneGame() {
     pushTimer(tStartSpin);
   };
 
-  // ========================================
-  // APUESTAS
-  // ========================================
+  // === APUESTAS ===
   const addBet = (color) => {
     setBets((prev) => {
       const total = prev.rojo + prev.azul + prev.blanco + chipValue;
-      if (total > MAX_BET_CREDITS) {
-        alert(`Máximo ${MAX_BET_CREDITS} crédito`);
+      if (total > playerCredits) {
+        alert(`Máximo ${playerCredits} créditos`);
+        return prev;
+      }
+      if (total > CONFIG.MAX_BET_CREDITS) {
+        alert(`Límite: ${CONFIG.MAX_BET_CREDITS} créditos por jugada`);
         return prev;
       }
       playBetSound();
@@ -353,8 +346,8 @@ export default function ColorPlaneGame() {
     setBets((prev) => {
       const doubled = { rojo: prev.rojo * 2, azul: prev.azul * 2, blanco: prev.blanco * 2 };
       const total = Object.values(doubled).reduce((a, b) => a + b, 0);
-      if (total > MAX_BET_CREDITS) {
-        alert("Supera límite");
+      if (total > playerCredits || total > CONFIG.MAX_BET_CREDITS) {
+        alert("No puedes exceder el límite de apuesta");
         return prev;
       }
       return doubled;
@@ -362,9 +355,7 @@ export default function ColorPlaneGame() {
   };
   const clearBets = () => setBets({ rojo: 0, azul: 0, blanco: 0 });
 
-  // ========================================
-  // ANIMACIONES
-  // ========================================
+  // === ANIMACIONES ===
   const planeVariants = {
     idle: { y: -30, scale: 1, opacity: 1, rotate: 0 },
     takeoff: { y: 200, scale: 1.4, opacity: 0, rotate: 20, transition: { duration: TAKEOFF_DUR / 1000, ease: "easeIn" } },
@@ -373,339 +364,410 @@ export default function ColorPlaneGame() {
   };
 
   const lightVariants = {
-    idle: { opacity: 0.8, filter: "brightness(0.7)" },
-    on: { opacity: 1, filter: "brightness(1.2)" },
+    idle: { opacity: 1, filter: "brightness(0.7)" },
+    on: { opacity: 1.5, filter: "brightness(1.5)" },
     flicker: {
       opacity: [1, 0.7, 1],
-      filter: ["brightness(1.5)", "brightness(1.0)", "brightness(1.5)"],
+      filter: ["brightness(1.8)", "brightness(1.0)", "brightness(1.8)"],
       transition: { duration: 0.3, repeat: Infinity, repeatType: "loop", ease: "easeInOut" },
     },
   };
 
-  // ========================================
-  // MODALES
-  // ========================================
+  // === MODAL COMPRA ===
   const BuyCreditsModal = () => {
     const [wldAmount, setWldAmount] = useState(1);
     return showBuyModal ? (
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-        <div style={{ background: "#fff", padding: 24, borderRadius: 16, width: "90%", maxWidth: 400 }}>
-          <h3>Comprar Créditos</h3>
-          <p>1 WLD = 1 Crédito</p>
-          <input
-            type="number"
-            min="1"
-            value={wldAmount}
-            onChange={(e) => setWldAmount(Math.max(1, parseInt(e.target.value) || 1))}
-            style={{ width: "100%", padding: 12, margin: "12px 0", borderRadius: 8, border: "1px solid #ccc" }}
-          />
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(10px)" }}>
+        <div style={{ background: "linear-gradient(145deg, #1a1a1a, #2d2d2d)", padding: 30, borderRadius: 20, width: "90%", maxWidth: 400, border: "2px solid #ffd700", boxShadow: "0 0 20px rgba(255,215,0,0.5)" }}>
+          <h3 style={{ color: "#ffd700", textAlign: "center", marginBottom: 16, textShadow: "0 0 10px #ffd700" }}>COMPRAR CRÉDITOS</h3>
+          <p style={{ color: "#fff", textAlign: "center" }}><strong>1 WLD = 10 Créditos</strong></p>
+          {isDemo && <p style={{ color: "#ff3b30", fontWeight: "bold", textAlign: "center" }}>MODO DEMO: Compra simulada</p>}
+          <input type="number" min="1" step="1" value={wldAmount} onChange={(e) => setWldAmount(Math.max(1, parseInt(e.target.value) || 1))}
+            style={{ width: "100%", padding: 14, margin: "12px 0", borderRadius: 12, border: "2px solid #ffd700", background: "#111", color: "#fff", fontSize: 18, textAlign: "center" }} />
+          <p style={{ color: "#ffd700", textAlign: "center", fontSize: 18 }}>Recibirás: <strong>{wldAmount * 10} créditos</strong></p>
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => { setShowBuyModal(false); }} style={{ flex: 1, padding: 12, background: "#ccc", borderRadius: 8 }}>Cancelar</button>
+            <button onClick={() => setShowBuyModal(false)} style={{ flex: 1, padding: 14, background: "#444", borderRadius: 12, color: "#fff", fontWeight: "bold" }}>Cancelar</button>
             <button onClick={() => {
-              // SIMULACIÓN: Aquí iría la integración con Worldcoin Wallet
-              alert(`Compra simulada: ${wldAmount} WLD → ${wldAmount} créditos`);
-              setPlayerCredits((c) => c + wldAmount);
+              const credits = wldAmount * 10;
+              if (isDemo) alert(`MODO DEMO: +${credits} créditos (simulado)`);
+              else alert(`Compra exitosa: ${wldAmount} WLD → ${credits} créditos`);
+              setPlayerCredits(c => c + credits);
               setShowBuyModal(false);
-            }} style={{ flex: 1, padding: 12, background: "#ffd54f", borderRadius: 8, fontWeight: "bold" }}>Comprar</button>
+            }} style={{ flex: 1, padding: 14, background: "linear-gradient(135deg, #ffd700, #ff6b6b)", borderRadius: 12, color: "#000", fontWeight: "bold", boxShadow: "0 0 15px rgba(255,215,0,0.6)" }}>Comprar</button>
           </div>
         </div>
       </div>
     ) : null;
   };
 
+  // === MODAL RETIRO ===
   const WithdrawModal = () => {
+    if (isDemo) {
+      return showWithdrawModal ? (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(10px)" }}>
+          <div style={{ background: "linear-gradient(145deg, #1a1a1a, #2d2d2d)", padding: 30, borderRadius: 20, width: "90%", maxWidth: 400, border: "2px solid #ff3b30", boxShadow: "0 0 20px rgba(255,59,48,0.5)", textAlign: "center" }}>
+            <h3 style={{ color: "#ff3b30", textShadow: "0 0 10px #ff3b30" }}>RETIRO NO DISPONIBLE</h3>
+            <p style={{ color: "#fff" }}>Estás en <strong>MODO DEMO</strong></p>
+            <p style={{ color: "#ccc" }}>Los retiros solo están disponibles con World ID verificado.</p>
+            <button onClick={() => setShowWithdrawModal(false)} style={{ marginTop: 16, padding: 14, background: "#444", borderRadius: 12, color: "#fff", width: "100%" }}>Cerrar</button>
+          </div>
+        </div>
+      ) : null;
+    }
+
+    const [creditsToWithdraw, setCreditsToWithdraw] = useState(5);
+    const maxCredits = Math.floor(playerCredits / CONFIG.WITHDRAW_STEP) * CONFIG.WITHDRAW_STEP;
+    const canWithdraw = playerCredits >= CONFIG.MIN_WITHDRAW_CREDITS;
+
     return showWithdrawModal ? (
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-        <div style={{ background: "#fff", padding: 24, borderRadius: 16, width: "90%", maxWidth: 400 }}>
-          <h3>Retirar WLD</h3>
-          <p>WLD acumulados: <strong>{accumulatedWLD}</strong></p>
-          {accumulatedWLD >= MIN_WITHDRAW_WLD ? (
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(10px)" }}>
+        <div style={{ background: "linear-gradient(145deg, #1a1a1a, #2d2d2d)", padding: 30, borderRadius: 20, width: "90%", maxWidth: 400, border: "2px solid #28a745", boxShadow: "0 0 20px rgba(40,167,69,0.5)" }}>
+          <h3 style={{ color: "#28a745", textAlign: "center", textShadow: "0 0 10px #28a745" }}>RETIRAR WLD</h3>
+          <p style={{ color: "#fff", textAlign: "center" }}>Créditos disponibles: <strong>{playerCredits}</strong></p>
+          {canWithdraw ? (
             <>
-              <p>Puedes retirar hasta <strong>{accumulatedWLD}</strong> WLD</p>
+              <select value={creditsToWithdraw} onChange={(e) => setCreditsToWithdraw(Number(e.target.value))}
+                style={{ width: "100%", padding: 14, margin: "12px 0", borderRadius: 12, border: "2px solid #28a745", background: "#111", color: "#fff", fontSize: 16 }}>
+                {Array.from({ length: maxCredits / CONFIG.WITHDRAW_STEP }, (_, i) => {
+                  const val = (i + 1) * CONFIG.WITHDRAW_STEP;
+                  return <option key={val} value={val}>{val} créditos → {val / CONFIG.CREDITS_PER_WLD} WLD</option>;
+                })}
+              </select>
+              <p style={{ color: "#28a745", textAlign: "center", fontSize: 18 }}>Recibirás: <strong>{creditsToWithdraw / CONFIG.CREDITS_PER_WLD} WLD</strong></p>
               <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                <button onClick={() => setShowWithdrawModal(false)} style={{ flex: 1, padding: 12, background: "#ccc", borderRadius: 8 }}>Cancelar</button>
+                <button onClick={() => setShowWithdrawModal(false)} style={{ flex: 1, padding: 14, background: "#444", borderRadius: 12, color: "#fff" }}>Cancelar</button>
                 <button onClick={() => {
-                  alert(`Retiro simulado: ${accumulatedWLD} WLD`);
-                  setAccumulatedWLD(0);
+                  const wld = creditsToWithdraw / CONFIG.CREDITS_PER_WLD;
+                  setPlayerCredits(c => c - creditsToWithdraw);
+                  alert(`¡Retiro exitoso!\nQuemaste ${creditsToWithdraw} créditos → Recibiste ${wld} WLD`);
                   setShowWithdrawModal(false);
-                }} style={{ flex: 1, padding: 12, background: "#28a745", color: "#fff", borderRadius: 8, fontWeight: "bold" }}>Retirar</button>
+                }} style={{ flex: 1, padding: 14, background: "linear-gradient(135deg, #28a745, #1e7e34)", color: "#fff", borderRadius: 12, fontWeight: "bold", boxShadow: "0 0 15px rgba(40,167,69,0.6)" }}>Retirar</button>
               </div>
             </>
           ) : (
-            <p style={{ color: "#dc3545" }}>Mínimo {MIN_WITHDRAW_WLD} WLD para retirar</p>
+            <p style={{ color: "#dc3545", textAlign: "center" }}>Mínimo {CONFIG.MIN_WITHDRAW_CREDITS} créditos para retirar</p>
           )}
-          <button onClick={() => setShowWithdrawModal(false)} style={{ marginTop: 16, width: "100%", padding: 12, background: "#eee", borderRadius: 8 }}>Cerrar</button>
+          <button onClick={() => setShowWithdrawModal(false)} style={{ marginTop: 16, width: "100%", padding: 14, background: "#444", borderRadius: 12, color: "#ccc" }}>Cerrar</button>
         </div>
       </div>
     ) : null;
   };
 
-  // ========================================
-  // VISTA HISTORIAL
-  // ========================================
-  const renderView = () => {
-    if (view === "historial") {
-      return (
-        <div style={{ width: "100%", maxWidth: 520, marginTop: 16, background: "#fff", padding: 12, borderRadius: 8, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
-          <h3 style={{ marginBottom: 12 }}>Historial</h3>
-          {history.length === 0 && <p>No hay partidas</p>}
-          {history.map((h, i) => {
-            const won = h.totalWin > 0;
-            const lost = Object.values(h.losses).reduce((a, b) => a + b, 0);
-            return (
-              <div key={i} style={{ marginBottom: 8, padding: 10, borderRadius: 6, background: won ? "rgba(0,200,0,0.08)" : "rgba(200,0,0,0.08)", border: "1px solid #ddd" }}>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <span style={{ display: "inline-block", width: 20, height: 20, background: h.landed.hex, border: "1px solid #222", marginRight: 8 }} />
-                  <strong>{h.landed.name}</strong>
-                  <span style={{ marginLeft: 8 }}>{won ? `+${h.totalWin}` : `-${lost}`} créditos</span>
-                </div>
-                <small style={{ color: "#555" }}>{h.fecha} - {h.hora}</small>
-              </div>
-            );
-          })}
-          <button style={{ marginTop: 16, padding: "8px 14px", borderRadius: 6, background: "#eee" }} onClick={() => setView("game")}>
-            Volver
-          </button>
-        </div>
-      );
-    }
-    return null;
-  };
+  // === MODAL INFO – ESTILO LAS VEGAS ===
+  const InfoModal = () => {
+    return showInfoModal ? (
+      <div style={{ 
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0, 
+        background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", 
+        justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)"
+      }}>
+        <div style={{ 
+          background: "linear-gradient(145deg, #1a1a1a, #2d2d2d)", 
+          padding: 30, borderRadius: 24, width: "90%", maxWidth: 420,
+          border: "3px solid #ffd700", boxShadow: "0 0 30px rgba(255,215,0,0.6), inset 0 0 20px rgba(255,215,0,0.2)",
+          position: "relative", overflow: "hidden"
+        }}>
+          <div style={{ position: "absolute", top: -10, left: -10, right: -10, height: 6, background: "linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff)", filter: "blur(8px)", opacity: 0.7 }}></div>
+          <div style={{ position: "absolute", bottom: -10, left: -10, right: -10, height: 6, background: "linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff)", filter: "blur(8px)", opacity: 0.7 }}></div>
 
-  // ========================================
-  // RENDER PRINCIPAL
-  // ========================================
-  return (
-    <div style={{ minHeight: "100vh", backgroundImage: "url(/assets/background.jpg)", backgroundSize: "cover", padding: 20, display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <img src="/assets/logo.png" alt="logo" style={{ width: "90%", maxWidth: 350, marginTop: 8 }} />
-
-      {/* ======================================== */}
-      {/* VERIFICACIÓN WORLD ID */}
-      {/* ======================================== */}
-      {!isVerified ? (
-        <div style={{ textAlign: "center", marginTop: 60 }}>
-          <h2 style={{ color: "#ffd54f", fontSize: 28, marginBottom: 20, fontWeight: "bold" }}>
-            Verifica tu humanidad
+          <h2 style={{ 
+            textAlign: "center", margin: "0 0 20px", color: "#ffd700", 
+            fontSize: 28, fontWeight: "bold", textShadow: "0 0 10px #ffd700, 0 0 20px #ff6b6b",
+            letterSpacing: 2
+          }}>
+            TABLA DE PAGOS
           </h2>
 
+          <div style={{ 
+            background: "rgba(0,0,0,0.5)", borderRadius: 16, padding: 16,
+            border: "1px solid #ffd700", boxShadow: "inset 0 0 15px rgba(255,215,0,0.3)"
+          }}>
+            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 8px" }}>
+              <tbody>
+                {[
+                  { color: "#ff0000", name: "ROJO", payout: "x2", glow: "#ff4444" },
+                  { color: "#0066ff", name: "AZUL", payout: "x2", glow: "#4488ff" },
+                  { color: "#ffffff", name: "BLANCO", payout: "x2", glow: "#ffffff" },
+                  { color: "#ffd700", name: "TODOS GANAN", payout: "x2.5", glow: "#ffff00" },
+                  { color: "#000000", name: "PIERDE TODO", payout: "x0", glow: "#ff00ff" },
+                ].map((item, i) => (
+                  <tr key={i} style={{ 
+                    animation: `pulse ${1.5 + i * 0.2}s infinite alternate`,
+                    transform: "translateY(0)", transition: "all 0.3s"
+                  }}>
+                    <td style={{ 
+                      padding: "14px 16px", borderRadius: "12px 0 0 12px",
+                      background: item.color, color: item.color === "#ffffff" ? "#000" : "#fff",
+                      fontWeight: "bold", fontSize: 18, textAlign: "center",
+                      boxShadow: `0 0 15px ${item.glow}, inset 0 0 10px rgba(255,255,255,0.3)`,
+                      border: `2px solid ${item.glow}`
+                    }}>
+                      {item.name}
+                    </td>
+                    <td style={{ 
+                      padding: "14px 16px", borderRadius: "0 12px 12px 0",
+                      background: "linear-gradient(135deg, #ffd700, #ff6b6b)", color: "#000",
+                      fontWeight: "bold", fontSize: 22, textAlign: "center",
+                      boxShadow: `0 0 15px ${item.glow}, inset 0 0 10px rgba(255,255,255,0.5)`,
+                      border: `2px solid ${item.glow}`, minWidth: 80
+                    }}>
+                      {item.payout}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <button onClick={() => setShowInfoModal(false)} style={{ 
+            marginTop: 24, width: "100%", padding: 16, background: "linear-gradient(145deg, #ff6b6b, #ff4444)",
+            color: "#fff", borderRadius: 16, border: "none", fontWeight: "bold", fontSize: 18,
+            cursor: "pointer", boxShadow: "0 6px 20px rgba(255,0,0,0.4), 0 0 15px rgba(255,107,107,0.6)",
+            textTransform: "uppercase", letterSpacing: 1, transition: "all 0.3s"
+          }} onMouseDown={(e) => e.target.style.transform = "scale(0.95)"} onMouseUp={(e) => e.target.style.transform = "scale(1)"}>
+            Cerrar
+          </button>
+        </div>
+
+        <style jsx>{`
+          @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.03); }
+          }
+          tr:hover {
+            transform: scale(1.05) !important;
+            z-index: 10;
+          }
+        `}</style>
+      </div>
+    ) : null;
+  };
+
+  // === RENDER ===
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #0f0f0f, #1a1a1a)",
+      backgroundImage: "url(/assets/background.jpg)",
+      backgroundSize: "cover",
+      backgroundAttachment: "fixed",
+      padding: "16px 8px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      fontFamily: "'Orbitron', 'Arial Black', sans-serif",
+      color: "#fff",
+      position: "relative",
+      overflowX: "hidden"
+    }}>
+      {/* Luces de fondo */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "100%", background: "radial-gradient(circle at 50% 50%, rgba(255,215,0,0.1), transparent 70%)", pointerEvents: "none" }}></div>
+
+      <img src="/assets/logo.png" alt="logo" style={{ width: "80%", maxWidth: 320, margin: "8px auto", filter: "drop-shadow(0 0 10px #ffd700)" }} />
+
+      {!isVerified ? (
+        <div style={{ textAlign: "center", marginTop: 40, width: "100%", maxWidth: 400 }}>
+          <h2 style={{ color: "#ffd700", fontSize: 26, marginBottom: 16, textShadow: "0 0 10px #ffd700", letterSpacing: 1 }}>VERIFICA TU HUMANIDAD</h2>
           {import.meta.env.VITE_APP_ID ? (
             <>
-              <IDKitWidget 
-                app_id={import.meta.env.VITE_APP_ID} 
-                action="play" 
-                signal="ruleta-colores" 
-                handleVerify={() => setIsVerified(true)}
-              >
+              <IDKitWidget app_id={import.meta.env.VITE_APP_ID} action="play" signal="ruleta-final" handleVerify={() => setIsVerified(true)}>
                 {({ open }) => (
-                  <button
-                    onClick={open}
-                    style={{
-                      background: "linear-gradient(#ffd54f, #ffb800)",
-                      color: "#000",
-                      padding: "16px 32px",
-                      borderRadius: 50,
-                      fontWeight: "bold",
-                      fontSize: 18,
-                      border: "none",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Conectar World ID
+                  <button onClick={open} style={{ background: "linear-gradient(135deg, #ffd700, #ff6b6b)", color: "#000", padding: "16px 32px", borderRadius: 50, fontWeight: "bold", fontSize: 18, border: "none", boxShadow: "0 0 20px rgba(255,215,0,0.6)", cursor: "pointer", width: "90%", maxWidth: 300 }}>
+                    CONECTAR WORLD ID
                   </button>
                 )}
               </IDKitWidget>
-
-              {/* ACCESIBILIDAD: TÍTULO Y DESCRIPCIÓN OCULTOS */}
-              <VisuallyHidden>
-                <h3 id="world-id-title">Verificación con World ID</h3>
-                <p id="world-id-desc">Escanea el código QR con la aplicación Worldcoin para verificar tu humanidad.</p>
-              </VisuallyHidden>
             </>
           ) : (
             <p style={{ color: "#ccc" }}>App ID no configurado. Usa Modo Demo.</p>
           )}
-
-          {/* MODO DEMO */}
           {enableDemo && !isVerified && (
-            <button 
-              onClick={enterDemoMode} 
-              style={{ 
-                marginTop: 16, 
-                color: "#ccc", 
-                textDecoration: "underline", 
-                fontSize: 14,
-                background: "none",
-                border: "none",
-                cursor: "pointer"
-              }}>
+            <button onClick={enterDemoMode} style={{ marginTop: 16, color: "#ffd700", textDecoration: "underline", fontSize: 14, background: "none", border: "none", cursor: "pointer" }}>
               Modo Demo (50 créditos)
             </button>
           )}
         </div>
       ) : (
         <>
-          {/* ======================================== */}
-          {/* SALIR DEL MODO DEMO */}
-          {/* ======================================== */}
-          {isVerified && localStorage.getItem("demoMode") === "true" && (
-            <div style={{ marginTop: 20, textAlign: "center" }}>
-              <p style={{ color: "#ffd54f", fontSize: 14 }}>Estás en Modo Demo</p>
-              <button
-                onClick={exitDemoMode}
-                style={{
-                  marginTop: 8,
-                  padding: "8px 16px",
-                  background: "#ff3b30",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  fontWeight: "bold",
-                  cursor: "pointer"
-                }}
-              >
+          {isDemo && (
+            <div style={{ margin: "16px 0", textAlign: "center", background: "linear-gradient(135deg, #ff3b30, #cc0000)", color: "#fff", padding: 12, borderRadius: 16, width: "90%", maxWidth: 400, boxShadow: "0 0 15px rgba(255,59,48,0.6)" }}>
+              <p style={{ margin: 0, fontWeight: "bold", fontSize: 16 }}>MODO DEMO - SIN RETIRO</p>
+              <button onClick={exitDemoMode} style={{ marginTop: 8, padding: "8px 16px", background: "#fff", color: "#ff3b30", border: "none", borderRadius: 12, fontWeight: "bold", cursor: "pointer" }}>
                 Salir del Modo Demo
               </button>
             </div>
           )}
 
-          {/* ======================================== */}
-          {/* PANEL DE CRÉDITOS */}
-          {/* ======================================== */}
-          <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-            <button onClick={() => setShowBuyModal(true)} style={{ padding: "10px 16px", background: "#ffd54f", borderRadius: 8, fontWeight: "bold" }}>
-              Comprar Créditos
+          <div style={{ margin: "8px 0", display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: 400 }}>
+            <button onClick={() => setShowBuyModal(true)} style={{ flex: 1, minWidth: 100, padding: "12px 8px", background: "linear-gradient(135deg, #ffd700, #ff6b6b)", borderRadius: 16, fontWeight: "bold", fontSize: 14, boxShadow: "0 0 15px rgba(255,215,0,0.6)" }}>COMPRAR</button>
+            <button onClick={() => setShowWithdrawModal(true)} disabled={isDemo}
+              style={{ flex: 1, minWidth: 100, padding: "12px 8px", background: isDemo ? "#666" : "linear-gradient(135deg, #28a745, #1e7e34)", color: "#fff", borderRadius: 16, fontWeight: "bold", fontSize: 14, cursor: isDemo ? "not-allowed" : "pointer", boxShadow: isDemo ? "none" : "0 0 15px rgba(40,167,69,0.6)" }}>
+              {isDemo ? "RETIRO (DEMO)" : "RETIRAR"}
             </button>
-            <button 
-              onClick={() => setShowWithdrawModal(true)} 
-              disabled={accumulatedWLD < MIN_WITHDRAW_WLD}
-              style={{ 
-                padding: "10px 16px", 
-                background: accumulatedWLD >= MIN_WITHDRAW_WLD ? "#28a745" : "#ccc", 
-                color: "#fff",
-                borderRadius: 8, 
-                fontWeight: "bold",
-                cursor: accumulatedWLD >= MIN_WITHDRAW_WLD ? "pointer" : "not-allowed"
-              }}
-            >
-              Retirar WLD ({accumulatedWLD})
-            </button>
+            <button onClick={() => setShowInfoModal(true)} style={{ flex: 1, minWidth: 100, padding: "12px 8px", background: "linear-gradient(135deg, #007bff, #0056b3)", color: "#fff", borderRadius: 16, fontWeight: "bold", fontSize: 14, boxShadow: "0 0 15px rgba(0,123,255,0.6)" }}>INFO</button>
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 16, color: "#fff" }}>
-            Créditos: <strong>{playerCredits}</strong> | WLD para retiro: <strong>{accumulatedWLD}</strong>
+          <div style={{ margin: "8px 0", fontSize: 18, color: "#ffd700", textShadow: "0 0 8px #ffd700", fontWeight: "bold" }}>
+            CRÉDITOS: <span style={{ fontSize: 24 }}>{playerCredits}</span>
           </div>
 
-          {/* ======================================== */}
-          {/* JUEGO */}
-          {/* ======================================== */}
           {view === "game" && (
             <>
-              <div style={{ position: "relative", marginTop: 20, width: "90%", maxWidth: 400 }}>
-                <motion.div
-                  animate={{ rotate: rotation }}
-                  transition={{ duration: SPIN_DUR / 1000, ease: "easeOut" }}
-                  style={{ width: "100%", aspectRatio: "1" }}
+              {/* === RULETA + LUCES + BOTÓN – CENTRADO PERFECTO === */}
+              <div style={{ 
+                position: "relative", 
+                margin: "20px auto", 
+                width: "min(380px, 90vw)", 
+                height: "min(380px, 90vw)", 
+                maxWidth: 380, 
+                maxHeight: 380 
+              }}>
+                {/* Canvas Ruleta */}
+                <motion.div 
+                  animate={{ rotate: rotation }} 
+                  transition={{ duration: SPIN_DUR / 1000, ease: "easeOut" }} 
+                  style={{ 
+                    position: "absolute", 
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    width: "100%", 
+                    height: "100%" 
+                  }}
                 >
-                  <canvas
-                    ref={canvasRef}
-                    style={{ width: "100%", height: "100%", display: "block" }}
+                  <canvas 
+                    ref={canvasRef} 
+                    style={{ 
+                      width: "100%", 
+                      height: "100%", 
+                      display: "block", 
+                      borderRadius: "50%", 
+                      boxShadow: "0 0 30px rgba(255,215,0,0.8), inset 0 0 20px rgba(0,0,0,0.5)" 
+                    }} 
                   />
                 </motion.div>
 
-                <motion.img
-                  src="/assets/roulette_lights_only.png"
-                  variants={lightVariants}
-                  animate={lightAnimationState}
+                {/* Luces Neón */}
+                <motion.img 
+                  src="/assets/roulette_lights_only.png" 
+                  variants={lightVariants} 
+                  animate={lightAnimationState} 
                   initial="idle"
-                  style={{ position: "absolute", top: -20, left: -20, width: "111%", height: "111%", pointerEvents: "none", zIndex: 15 }}
+                  style={{ 
+                    position: "absolute", 
+                    top: "50%", 
+                    left: "50%", 
+                    transform: "translate(-50%, -50%)", 
+                    width: "110%", 
+                    height: "110%", 
+                    pointerEvents: "none", 
+                    zIndex: 15 
+                  }} 
                 />
 
-                <img
-                  src="/assets/flecha.png"
+                {/* Flecha */}
+                <img 
+                  src="/assets/flecha.png" 
                   alt="flecha"
-                  style={{ position: "absolute", top: 35, left: "50%", transform: "translateX(-50%)", width: "60px", zIndex: 10, pointerEvents: "none" }}
+                  style={{ 
+                    position: "absolute", 
+                    top: 35, 
+                    left: "50%", 
+                    transform: "translateX(-50%)", 
+                    width: "60px", 
+                    zIndex: 10, 
+                    pointerEvents: "none", 
+                    filter: "drop-shadow(0 0 10px #ffd700)" 
+                  }} 
                 />
 
-                <motion.img
-                  src="/assets/plane.png"
-                  variants={planeVariants}
-                  animate={planeAction}
+                {/* Avión */}
+                <motion.img 
+                  src="/assets/plane.png" 
+                  variants={planeVariants} 
+                  animate={planeAction} 
                   initial="idle"
-                  style={{ position: "absolute", left: "37.4%", top: 1, transform: "translateX(-50%)", width: "25%", maxWidth: 120, pointerEvents: "none", zIndex: 20 }}
+                  style={{ 
+                    position: "absolute", 
+                    left: "36%", 
+                    top: "1%", 
+                    transform: "translateX(-50%)", 
+                    width: "28%", 
+                    maxWidth: 120, 
+                    pointerEvents: "none", 
+                    zIndex: 20 
+                  }} 
                 />
 
-                <button
-                  onClick={spin}
+                {/* Botón Apostar */}
+                <button 
+                  onClick={spin} 
                   disabled={spinning}
-                  style={{
-                    position: "absolute",
-                    top: "50%",
-                    left: "50%",
-                    transform: "translate(-50%, -50%)",
-                    width: "110px",
-                    height: "110px",
-                    background: "#ffd54f",
-                    borderRadius: "50%",
-                    border: "none",
-                    fontWeight: "bold",
-                    fontSize: 18,
-                    cursor: "pointer",
-                    zIndex: 20,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                  style={{ 
+                    position: "absolute", 
+                    top: "50%", 
+                    left: "50%", 
+                    transform: "translate(-50%, -50%)", 
+                    width: "120px", 
+                    height: "120px", 
+                    background: "linear-gradient(135deg, #ffd700, #ff6b6b)", 
+                    borderRadius: "50%", 
+                    border: "4px solid #fff", 
+                    fontWeight: "bold", 
+                    fontSize: 18, 
+                    cursor: "pointer", 
+                    zIndex: 20, 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    boxShadow: "0 0 30px rgba(255,215,0,0.9), inset 0 0 20px rgba(255,255,255,0.3)", 
+                    textShadow: "0 0 10px #000",
+                    fontFamily: "'Orbitron', sans-serif"
                   }}
                 >
-                  {spinning ? "Girando..." : "Apostar"}
+                  {spinning ? "GIRANDO..." : "APOSTAR"}
                 </button>
               </div>
 
-              <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-                {[0.1, 0.5, 1].map((v) => (
-                  <button key={v} onClick={() => setChipValue(v)} style={{ padding: "8px 14px", borderRadius: 8, background: chipValue === v ? "#ffd54f" : "#eee", fontWeight: chipValue === v ? "bold" : "normal" }}>
-                    {v} crédito
+              <div style={{ margin: "16px 0", display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: 380 }}>
+                {CONFIG.CHIP_VALUES.map((v) => (
+                  <button key={v} onClick={() => setChipValue(v)} style={{ padding: "12px 16px", borderRadius: 16, background: chipValue === v ? "linear-gradient(135deg, #ffd700, #ff6b6b)" : "#333", color: chipValue === v ? "#000" : "#fff", fontWeight: chipValue === v ? "bold" : "normal", border: "2px solid #ffd700", minWidth: 60, boxShadow: chipValue === v ? "0 0 15px rgba(255,215,0,0.6)" : "none" }}>
+                    {v}
                   </button>
                 ))}
+                <button onClick={maxBet} style={{ background: "linear-gradient(135deg, #ff3b30, #cc0000)", color: "#fff", padding: "12px 16px", borderRadius: 16, fontWeight: "bold", minWidth: 80, boxShadow: "0 0 15px rgba(255,59,48,0.6)" }}>MAX BET</button>
               </div>
 
-              <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-                <motion.button onClick={() => addBet("rojo")} whileTap={{ scale: 0.9, y: 3 }} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(#ff3b30, #cc0000)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.3)", border: "none", fontSize: 14, fontWeight: "bold" }}>
-                  <span>ROJO</span><span>x1.5</span><small>({bets.rojo})</small>
+              <div style={{ margin: "20px 0", display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: 380 }}>
+                <motion.button onClick={() => addBet("rojo")} whileTap={{ scale: 0.9 }} style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg, #ff3b30, #cc0000)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 0 20px rgba(255,59,48,0.8), inset 0 0 15px rgba(255,255,255,0.2)", border: "3px solid #fff", fontSize: 16, fontWeight: "bold" }}>
+                  <span>ROJO</span><small style={{ fontSize: 12 }}>({bets.rojo})</small>
                 </motion.button>
-                <motion.button onClick={() => addBet("azul")} whileTap={{ scale: 0.9, y: 3 }} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(#0066ff, #0033cc)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.3)", border: "none", fontSize: 14, fontWeight: "bold" }}>
-                  <span>AZUL</span><span>x2</span><small>({bets.azul})</small>
+                <motion.button onClick={() => addBet("azul")} whileTap={{ scale: 0.9 }} style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg, #0066ff, #0033cc)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 0 20px rgba(0,102,255,0.8), inset 0 0 15px rgba(255,255,255,0.2)", border: "3px solid #fff", fontSize: 16, fontWeight: "bold" }}>
+                  <span>AZUL</span><small style={{ fontSize: 12 }}>({bets.azul})</small>
                 </motion.button>
-                <motion.button onClick={() => addBet("blanco")} whileTap={{ scale: 0.9, y: 3 }} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(#ffffff, #e0e0e0)", color: "#111", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.3)", border: "1px solid #ccc", fontSize: 14, fontWeight: "bold" }}>
-                  <span>BLANCO</span><span>x3</span><small>({bets.blanco})</small>
+                <motion.button onClick={() => addBet("blanco")} whileTap={{ scale: 0.9 }} style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(135deg, #ffffff, #e0e0e0)", color: "#111", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 0 20px rgba(255,255,255,0.8), inset 0 0 15px rgba(0,0,0,0.2)", border: "3px solid #ffd700", fontSize: 16, fontWeight: "bold" }}>
+                  <span>BLANCO</span><small style={{ fontSize: 12 }}>({bets.blanco})</small>
                 </motion.button>
               </div>
 
-              <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-                <motion.button onClick={repeatBet} whileTap={{ scale: 0.9 }} style={{ padding: "8px 14px", borderRadius: 8 }}>Repetir</motion.button>
-                <motion.button onClick={doubleBet} whileTap={{ scale: 0.9 }} style={{ padding: "8px 14px", borderRadius: 8 }}>x2 Doblar</motion.button>
-                <motion.button onClick={clearBets} whileTap={{ scale: 0.9 }} style={{ padding: "8px 14px", borderRadius: 8 }}>Cero</motion.button>
+              <div style={{ margin: "16px 0", display: "flex", gap: 8, justifyContent: "center", width: "100%", maxWidth: 380 }}>
+                <motion.button onClick={repeatBet} whileTap={{ scale: 0.9 }} style={{ padding: "12px 20px", borderRadius: 16, background: "#444", color: "#fff", fontWeight: "bold" }}>REPETIR</motion.button>
+                <motion.button onClick={doubleBet} whileTap={{ scale: 0.9 }} style={{ padding: "12px 20px", borderRadius: 16, background: "#ff6b6b", color: "#fff", fontWeight: "bold" }}>x2</motion.button>
+                <button onClick={clearBets} style={{ padding: "12px 20px", borderRadius: 16, background: "#333", color: "#ccc", fontWeight: "bold" }}>CERO</button>
               </div>
 
-              <div style={{ marginTop: 24, display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
-                {history.length === 0 && <p style={{ color: "#eee" }}>Sin resultados</p>}
-                {!isRoundActive &&
-                  history.map((h, i) => (
-                    <div key={i} onClick={() => setView("historial")} style={{ width: 26, height: 26, borderRadius: "50%", background: h.landed.hex, border: "2px solid #222", cursor: "pointer" }} />
-                  ))}
+              <div style={{ margin: "24px 0", display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: 380 }}>
+                {history.length === 0 && <p style={{ color: "#666", fontSize: 14 }}>Sin resultados</p>}
+                {!isRoundActive && history.map((h, i) => (
+                  <div key={i} style={{ width: 32, height: 32, borderRadius: "50%", background: h.landed.hex, border: "3px solid #ffd700", boxShadow: "0 0 10px rgba(255,215,0,0.6)" }} />
+                ))}
               </div>
             </>
           )}
-          {renderView()}
         </>
       )}
 
-      {/* ======================================== */}
-      {/* MODALES */}
-      {/* ======================================== */}
       <BuyCreditsModal />
       <WithdrawModal />
+      <InfoModal />
     </div>
   );
 }
