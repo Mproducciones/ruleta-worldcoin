@@ -1,4 +1,10 @@
 // src/App.jsx
+// ========================================
+// MINIAPP RULETA WORLDCOIN - SISTEMA DE CRÉDITOS
+// Autor: MProducciones
+// Fecha: 11 Nov 2025
+// ========================================
+
 import React, { useRef, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { IDKitWidget } from "@worldcoin/idkit";
@@ -30,12 +36,14 @@ const useSound = (url) => {
   return play;
 };
 
-/* ===== CONFIG ===== */
-const INITIAL_PLAYER_BALANCE = 10.0;
-const MAX_HISTORY = 10;
-const MAX_BET = 1.0;
+/* ===== CONFIGURACIÓN GLOBAL ===== */
+const INITIAL_CREDITS = 0;           // Créditos al inicio
+const CREDITS_PER_WLD = 1;            // 1 WLD = 1 crédito
+const MIN_WITHDRAW_WLD = 5;          // Retiro mínimo: 5 WLD
+const MAX_BET_CREDITS = 1;           // Máximo apuesta: 1 crédito
+const DEMO_CREDITS = 50;             // Créditos en modo demo
 
-/* ===== SECCIONES RUEDA ===== */
+/* ===== SECCIONES DE LA RUEDA ===== */
 const sections = [
   { hex: "#ff0000", name: "ROJO", multiplier: 1.5 },
   { hex: "#0066ff", name: "AZUL", multiplier: 2 },
@@ -54,6 +62,9 @@ const sections = [
 ];
 
 export default function ColorPlaneGame() {
+  // ========================================
+  // ESTADO PRINCIPAL
+  // ========================================
   const canvasRef = useRef(null);
   const timersRef = useRef([]);
   const pushTimer = (t) => timersRef.current.push(t);
@@ -66,30 +77,38 @@ export default function ColorPlaneGame() {
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [isRoundActive, setIsRoundActive] = useState(false);
-  const [chipValue, setChipValue] = useState(0.1);
-  const [bets, setBets] = useState({ rojo: 0, azul: 0, blanco: 0 });
+  const [chipValue, setChipValue] = useState(0.1); // Valor de ficha en créditos
+  const [bets, setBets] = useState({ rojo: 0, azul: 0, blanco: 0 }); // Apuestas en créditos
   const [lastBets, setLastBets] = useState(null);
-  const [playerBalance, setPlayerBalance] = useState(INITIAL_PLAYER_BALANCE);
+  const [playerCredits, setPlayerCredits] = useState(INITIAL_CREDITS); // Créditos del jugador
+  const [accumulatedWLD, setAccumulatedWLD] = useState(0); // WLD ganados (para retiro)
   const [planeAction, setPlaneAction] = useState("idle");
   const [lightAnimationState, setLightAnimationState] = useState("idle");
   const [history, setHistory] = useState([]);
   const [view, setView] = useState("game");
   const [isVerified, setIsVerified] = useState(false);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const radius = 160;
 
+  // ========================================
+  // SONIDOS
+  // ========================================
   const playSpinSound = useSound("/sounds/spin.mp3");
   const playWinSound = useSound("/sounds/win.mp3");
   const playLoseSound = useSound("/sounds/lose.mp3");
   const playBetSound = useSound("/sounds/bet.mp3");
 
+  // ========================================
+  // MODO DEMO
+  // ========================================
   const isDev = import.meta.env.DEV;
   const enableDemo = isDev || import.meta.env.VITE_ENABLE_DEMO === "true";
 
-  // MODO DEMO AUTOMÁTICO SI NO HAY APP_ID
   useEffect(() => {
     if (enableDemo && (!import.meta.env.VITE_APP_ID || localStorage.getItem("demoMode") === "true")) {
       setIsVerified(true);
-      setPlayerBalance(50);
+      setPlayerCredits(DEMO_CREDITS);
       localStorage.setItem("demoMode", "true");
     }
   }, [enableDemo]);
@@ -97,13 +116,14 @@ export default function ColorPlaneGame() {
   const enterDemoMode = () => {
     localStorage.setItem("demoMode", "true");
     setIsVerified(true);
-    setPlayerBalance(50);
+    setPlayerCredits(DEMO_CREDITS);
   };
 
   const exitDemoMode = () => {
     localStorage.removeItem("demoMode");
     setIsVerified(false);
-    setPlayerBalance(INITIAL_PLAYER_BALANCE);
+    setPlayerCredits(INITIAL_CREDITS);
+    setAccumulatedWLD(0);
     setBets({ rojo: 0, azul: 0, blanco: 0 });
     setHistory([]);
     setView("game");
@@ -113,21 +133,20 @@ export default function ColorPlaneGame() {
     setIsRoundActive(false);
   };
 
+  // ========================================
+  // DIBUJO DE LA RULETA
+  // ========================================
   const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
     const words = text.split(" ");
-    let line = "";
-    let lines = [];
-    if (ctx.measureText(text).width <= maxWidth) {
-      lines.push(text);
-    } else {
+    let line = "", lines = [];
+    if (ctx.measureText(text).width <= maxWidth) lines.push(text);
+    else {
       for (let n = 0; n < words.length; n++) {
         const testLine = line + words[n] + " ";
         if (ctx.measureText(testLine).width > maxWidth && n > 0) {
           lines.push(line);
           line = words[n] + " ";
-        } else {
-          line = testLine;
-        }
+        } else line = testLine;
       }
       lines.push(line);
     }
@@ -212,6 +231,9 @@ export default function ColorPlaneGame() {
     return () => timersRef.current.forEach(clearTimeout);
   }, []);
 
+  // ========================================
+  // HISTORIAL
+  // ========================================
   const pushHistory = (landed, bets, totalWin, losses) => {
     const now = new Date();
     setHistory((h) => [
@@ -224,19 +246,22 @@ export default function ColorPlaneGame() {
         hora: now.toLocaleTimeString(),
       },
       ...h,
-    ].slice(0, MAX_HISTORY));
+    ].slice(0, 10));
   };
 
+  // ========================================
+  // GIRAR RULETA
+  // ========================================
   const spin = () => {
     const totalBet = bets.rojo + bets.azul + bets.blanco;
-    if (spinning || totalBet <= 0 || totalBet > playerBalance) {
-      alert("Apuesta inválida");
+    if (spinning || totalBet <= 0 || totalBet > playerCredits || totalBet > MAX_BET_CREDITS) {
+      alert(`Apuesta inválida. Máximo ${MAX_BET_CREDITS} crédito.`);
       return;
     }
 
     setSpinning(true);
     setIsRoundActive(true);
-    setPlayerBalance((p) => Number((p - totalBet).toFixed(8)));
+    setPlayerCredits((p) => p - totalBet);
     setLastBets(bets);
     setPlaneAction("takeoff");
     setLightAnimationState("flicker");
@@ -247,10 +272,6 @@ export default function ColorPlaneGame() {
       const finalRotation = rotation + randomRotation;
       setRotation(finalRotation);
       setPlaneAction("hiddenTop");
-
-      requestAnimationFrame(() => {
-        if (canvasRef.current) drawWheel();
-      });
 
       const tLandingStart = setTimeout(() => setPlaneAction("landing"), SPIN_DUR - LANDING_APPEAR_BEFORE_STOP);
       pushTimer(tLandingStart);
@@ -285,8 +306,9 @@ export default function ColorPlaneGame() {
           playLoseSound();
         } else if (totalWin > 0) {
           setTimeout(() => {
-            setPlayerBalance((p) => Number((p + totalWin).toFixed(8)));
-            alert(`¡Ganaste ${totalWin.toFixed(4)} WLD!`);
+            setPlayerCredits((p) => p + totalWin);
+            setAccumulatedWLD((w) => w + totalWin);
+            alert(`¡Ganaste ${totalWin} créditos!`);
             playWinSound();
           }, 50);
         } else {
@@ -311,11 +333,14 @@ export default function ColorPlaneGame() {
     pushTimer(tStartSpin);
   };
 
+  // ========================================
+  // APUESTAS
+  // ========================================
   const addBet = (color) => {
     setBets((prev) => {
       const total = prev.rojo + prev.azul + prev.blanco + chipValue;
-      if (total > MAX_BET) {
-        alert(`Máximo ${MAX_BET} WLD`);
+      if (total > MAX_BET_CREDITS) {
+        alert(`Máximo ${MAX_BET_CREDITS} crédito`);
         return prev;
       }
       playBetSound();
@@ -328,7 +353,7 @@ export default function ColorPlaneGame() {
     setBets((prev) => {
       const doubled = { rojo: prev.rojo * 2, azul: prev.azul * 2, blanco: prev.blanco * 2 };
       const total = Object.values(doubled).reduce((a, b) => a + b, 0);
-      if (total > MAX_BET) {
+      if (total > MAX_BET_CREDITS) {
         alert("Supera límite");
         return prev;
       }
@@ -337,6 +362,9 @@ export default function ColorPlaneGame() {
   };
   const clearBets = () => setBets({ rojo: 0, azul: 0, blanco: 0 });
 
+  // ========================================
+  // ANIMACIONES
+  // ========================================
   const planeVariants = {
     idle: { y: -30, scale: 1, opacity: 1, rotate: 0 },
     takeoff: { y: 200, scale: 1.4, opacity: 0, rotate: 20, transition: { duration: TAKEOFF_DUR / 1000, ease: "easeIn" } },
@@ -354,6 +382,67 @@ export default function ColorPlaneGame() {
     },
   };
 
+  // ========================================
+  // MODALES
+  // ========================================
+  const BuyCreditsModal = () => {
+    const [wldAmount, setWldAmount] = useState(1);
+    return showBuyModal ? (
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+        <div style={{ background: "#fff", padding: 24, borderRadius: 16, width: "90%", maxWidth: 400 }}>
+          <h3>Comprar Créditos</h3>
+          <p>1 WLD = 1 Crédito</p>
+          <input
+            type="number"
+            min="1"
+            value={wldAmount}
+            onChange={(e) => setWldAmount(Math.max(1, parseInt(e.target.value) || 1))}
+            style={{ width: "100%", padding: 12, margin: "12px 0", borderRadius: 8, border: "1px solid #ccc" }}
+          />
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => { setShowBuyModal(false); }} style={{ flex: 1, padding: 12, background: "#ccc", borderRadius: 8 }}>Cancelar</button>
+            <button onClick={() => {
+              // SIMULACIÓN: Aquí iría la integración con Worldcoin Wallet
+              alert(`Compra simulada: ${wldAmount} WLD → ${wldAmount} créditos`);
+              setPlayerCredits((c) => c + wldAmount);
+              setShowBuyModal(false);
+            }} style={{ flex: 1, padding: 12, background: "#ffd54f", borderRadius: 8, fontWeight: "bold" }}>Comprar</button>
+          </div>
+        </div>
+      </div>
+    ) : null;
+  };
+
+  const WithdrawModal = () => {
+    return showWithdrawModal ? (
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+        <div style={{ background: "#fff", padding: 24, borderRadius: 16, width: "90%", maxWidth: 400 }}>
+          <h3>Retirar WLD</h3>
+          <p>WLD acumulados: <strong>{accumulatedWLD}</strong></p>
+          {accumulatedWLD >= MIN_WITHDRAW_WLD ? (
+            <>
+              <p>Puedes retirar hasta <strong>{accumulatedWLD}</strong> WLD</p>
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button onClick={() => setShowWithdrawModal(false)} style={{ flex: 1, padding: 12, background: "#ccc", borderRadius: 8 }}>Cancelar</button>
+                <button onClick={() => {
+                  alert(`Retiro simulado: ${accumulatedWLD} WLD`);
+                  setAccumulatedWLD(0);
+                  setShowWithdrawModal(false);
+                }} style={{ flex: 1, padding: 12, background: "#28a745", color: "#fff", borderRadius: 8, fontWeight: "bold" }}>Retirar</button>
+              </div>
+            </>
+          ) : (
+            <p style={{ color: "#dc3545" }}>Mínimo {MIN_WITHDRAW_WLD} WLD para retirar</p>
+          )}
+          <button onClick={() => setShowWithdrawModal(false)} style={{ marginTop: 16, width: "100%", padding: 12, background: "#eee", borderRadius: 8 }}>Cerrar</button>
+        </div>
+      </div>
+    ) : null;
+  };
+
+  // ========================================
+  // VISTA HISTORIAL
+  // ========================================
   const renderView = () => {
     if (view === "historial") {
       return (
@@ -368,7 +457,7 @@ export default function ColorPlaneGame() {
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <span style={{ display: "inline-block", width: 20, height: 20, background: h.landed.hex, border: "1px solid #222", marginRight: 8 }} />
                   <strong>{h.landed.name}</strong>
-                  <span style={{ marginLeft: 8 }}>{won ? `+${h.totalWin.toFixed(4)}` : `-${lost.toFixed(4)}`} WLD</span>
+                  <span style={{ marginLeft: 8 }}>{won ? `+${h.totalWin}` : `-${lost}`} créditos</span>
                 </div>
                 <small style={{ color: "#555" }}>{h.fecha} - {h.hora}</small>
               </div>
@@ -383,10 +472,16 @@ export default function ColorPlaneGame() {
     return null;
   };
 
+  // ========================================
+  // RENDER PRINCIPAL
+  // ========================================
   return (
     <div style={{ minHeight: "100vh", backgroundImage: "url(/assets/background.jpg)", backgroundSize: "cover", padding: 20, display: "flex", flexDirection: "column", alignItems: "center" }}>
       <img src="/assets/logo.png" alt="logo" style={{ width: "90%", maxWidth: 350, marginTop: 8 }} />
 
+      {/* ======================================== */}
+      {/* VERIFICACIÓN WORLD ID */}
+      {/* ======================================== */}
       {!isVerified ? (
         <div style={{ textAlign: "center", marginTop: 60 }}>
           <h2 style={{ color: "#ffd54f", fontSize: 28, marginBottom: 20, fontWeight: "bold" }}>
@@ -394,36 +489,44 @@ export default function ColorPlaneGame() {
           </h2>
 
           {import.meta.env.VITE_APP_ID ? (
-            <IDKitWidget app_id={import.meta.env.VITE_APP_ID} action="play" signal="ruleta-colores" handleVerify={() => setIsVerified(true)}>
-              {({ open }) => (
-                <button
-                  onClick={open}
-                  style={{
-                    background: "linear-gradient(#ffd54f, #ffb800)",
-                    color: "#000",
-                    padding: "16px 32px",
-                    borderRadius: 50,
-                    fontWeight: "bold",
-                    fontSize: 18,
-                    border: "none",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Conectar World ID
-                </button>
-              )}
-            </IDKitWidget>
+            <>
+              <IDKitWidget 
+                app_id={import.meta.env.VITE_APP_ID} 
+                action="play" 
+                signal="ruleta-colores" 
+                handleVerify={() => setIsVerified(true)}
+              >
+                {({ open }) => (
+                  <button
+                    onClick={open}
+                    style={{
+                      background: "linear-gradient(#ffd54f, #ffb800)",
+                      color: "#000",
+                      padding: "16px 32px",
+                      borderRadius: 50,
+                      fontWeight: "bold",
+                      fontSize: 18,
+                      border: "none",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Conectar World ID
+                  </button>
+                )}
+              </IDKitWidget>
+
+              {/* ACCESIBILIDAD: TÍTULO Y DESCRIPCIÓN OCULTOS */}
+              <VisuallyHidden>
+                <h3 id="world-id-title">Verificación con World ID</h3>
+                <p id="world-id-desc">Escanea el código QR con la aplicación Worldcoin para verificar tu humanidad.</p>
+              </VisuallyHidden>
+            </>
           ) : (
             <p style={{ color: "#ccc" }}>App ID no configurado. Usa Modo Demo.</p>
           )}
 
-          <VisuallyHidden>
-            <h3>Verificación World ID</h3>
-            <p>Escanea el QR con la app de Worldcoin.</p>
-          </VisuallyHidden>
-
-          {/* BOTÓN MODO DEMO */}
+          {/* MODO DEMO */}
           {enableDemo && !isVerified && (
             <button 
               onClick={enterDemoMode} 
@@ -436,13 +539,15 @@ export default function ColorPlaneGame() {
                 border: "none",
                 cursor: "pointer"
               }}>
-              Modo Demo (50 WLD)
+              Modo Demo (50 créditos)
             </button>
           )}
         </div>
       ) : (
         <>
-          {/* BOTÓN SALIR DEL MODO DEMO */}
+          {/* ======================================== */}
+          {/* SALIR DEL MODO DEMO */}
+          {/* ======================================== */}
           {isVerified && localStorage.getItem("demoMode") === "true" && (
             <div style={{ marginTop: 20, textAlign: "center" }}>
               <p style={{ color: "#ffd54f", fontSize: 14 }}>Estás en Modo Demo</p>
@@ -464,6 +569,36 @@ export default function ColorPlaneGame() {
             </div>
           )}
 
+          {/* ======================================== */}
+          {/* PANEL DE CRÉDITOS */}
+          {/* ======================================== */}
+          <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+            <button onClick={() => setShowBuyModal(true)} style={{ padding: "10px 16px", background: "#ffd54f", borderRadius: 8, fontWeight: "bold" }}>
+              Comprar Créditos
+            </button>
+            <button 
+              onClick={() => setShowWithdrawModal(true)} 
+              disabled={accumulatedWLD < MIN_WITHDRAW_WLD}
+              style={{ 
+                padding: "10px 16px", 
+                background: accumulatedWLD >= MIN_WITHDRAW_WLD ? "#28a745" : "#ccc", 
+                color: "#fff",
+                borderRadius: 8, 
+                fontWeight: "bold",
+                cursor: accumulatedWLD >= MIN_WITHDRAW_WLD ? "pointer" : "not-allowed"
+              }}
+            >
+              Retirar WLD ({accumulatedWLD})
+            </button>
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 16, color: "#fff" }}>
+            Créditos: <strong>{playerCredits}</strong> | WLD para retiro: <strong>{accumulatedWLD}</strong>
+          </div>
+
+          {/* ======================================== */}
+          {/* JUEGO */}
+          {/* ======================================== */}
           {view === "game" && (
             <>
               <div style={{ position: "relative", marginTop: 20, width: "90%", maxWidth: 400 }}>
@@ -530,20 +665,20 @@ export default function ColorPlaneGame() {
               <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
                 {[0.1, 0.5, 1].map((v) => (
                   <button key={v} onClick={() => setChipValue(v)} style={{ padding: "8px 14px", borderRadius: 8, background: chipValue === v ? "#ffd54f" : "#eee", fontWeight: chipValue === v ? "bold" : "normal" }}>
-                    {v} WLD
+                    {v} crédito
                   </button>
                 ))}
               </div>
 
               <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
                 <motion.button onClick={() => addBet("rojo")} whileTap={{ scale: 0.9, y: 3 }} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(#ff3b30, #cc0000)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.3)", border: "none", fontSize: 14, fontWeight: "bold" }}>
-                  <span>ROJO</span><span>x1.5</span><small>({bets.rojo.toFixed(2)})</small>
+                  <span>ROJO</span><span>x1.5</span><small>({bets.rojo})</small>
                 </motion.button>
                 <motion.button onClick={() => addBet("azul")} whileTap={{ scale: 0.9, y: 3 }} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(#0066ff, #0033cc)", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.3)", border: "none", fontSize: 14, fontWeight: "bold" }}>
-                  <span>AZUL</span><span>x2</span><small>({bets.azul.toFixed(2)})</small>
+                  <span>AZUL</span><span>x2</span><small>({bets.azul})</small>
                 </motion.button>
                 <motion.button onClick={() => addBet("blanco")} whileTap={{ scale: 0.9, y: 3 }} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(#ffffff, #e0e0e0)", color: "#111", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.3)", border: "1px solid #ccc", fontSize: 14, fontWeight: "bold" }}>
-                  <span>BLANCO</span><span>x3</span><small>({bets.blanco.toFixed(2)})</small>
+                  <span>BLANCO</span><span>x3</span><small>({bets.blanco})</small>
                 </motion.button>
               </div>
 
@@ -552,8 +687,6 @@ export default function ColorPlaneGame() {
                 <motion.button onClick={doubleBet} whileTap={{ scale: 0.9 }} style={{ padding: "8px 14px", borderRadius: 8 }}>x2 Doblar</motion.button>
                 <motion.button onClick={clearBets} whileTap={{ scale: 0.9 }} style={{ padding: "8px 14px", borderRadius: 8 }}>Cero</motion.button>
               </div>
-
-              <div style={{ marginTop: 12, fontSize: 14, color: "#ddd" }}>Saldo: {playerBalance.toFixed(4)} WLD</div>
 
               <div style={{ marginTop: 24, display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
                 {history.length === 0 && <p style={{ color: "#eee" }}>Sin resultados</p>}
@@ -567,6 +700,12 @@ export default function ColorPlaneGame() {
           {renderView()}
         </>
       )}
+
+      {/* ======================================== */}
+      {/* MODALES */}
+      {/* ======================================== */}
+      <BuyCreditsModal />
+      <WithdrawModal />
     </div>
   );
 }
