@@ -1,0 +1,42 @@
+import { IDKitWidget } from "@worldcoin/idkit";
+
+function App() {
+  const handleProof = (result) => {
+    console.log("✅ Proof recibida:", result);
+    alert("Verificación completada con World ID!");
+  };
+
+  return (
+    <div style={{ textAlign: "center", marginTop: "50px" }}>
+      <h1>🎉 Avión de Colores 🎉</h1>
+      <p>Verifica tu humanidad con Worldcoin para jugar</p>
+      
+      <IDKitWidget
+        app_id="tu-app-id.worldcoin.app" // reemplaza con tu App ID real desde Worldcoin Dev Portal
+        action="play-game"
+        signal="color-plane"
+        onSuccess={handleProof}
+      >
+        {({ open }) => (
+          <button
+            onClick={open}
+            style={{
+              padding: "12px 20px",
+              fontSize: "16px",
+              backgroundColor: "#007bff",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              marginTop: "20px",
+            }}
+          >
+            🔑 Verificar con World ID
+          </button>
+        )}
+      </IDKitWidget>
+    </div>
+  );
+}
+
+export default App;
